@@ -29,7 +29,7 @@ See `catalog.yaml` for machine-readable metadata.
          │   ┌─────┐
          │   │ btn │
          │ ┌─┴─────┴─┐
-         │ │  wrap   │  ← recessed "GEEKBMS" on side wall
+         │ │  wrap   │  ← vertical silk-screen "GEEKBMS" on side wall
          │ │         │
          │ └─────────┘
          ○────────────→ +X
@@ -44,7 +44,7 @@ Kept clean for mates / fixtures:
 2. **Negative end flat** — planar face at `z = 0`.
 3. **Positive end shoulder** — top of wrap body (button sits above it).
 
-Lettering and heat-shrink cues are **recessed into the wrap side wall** so they do not grow the OD or break the end flats.
+Lettering is a shallow silk-screen / decal (near-flush film) on a portrait side panel; heat-shrink cues are recessed into the wrap side wall. Neither grows the OD nor breaks the end flats.
 
 ## Naming rules
 
@@ -61,7 +61,7 @@ Included (exterior cues only):
 - Shallow end grooves suggesting wrap tuck.
 - Positive button terminal.
 - Simple insulator ring recess around the button base.
-- Recessed side panel with raised-look **GEEKBMS** engraved lettering.
+- Portrait side panel with vertical silk-screen **GEEKBMS** lettering (along cell axis).
 
 Not included:
 

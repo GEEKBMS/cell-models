@@ -5,7 +5,8 @@ Coordinate system (documented in README):
   - Origin on cell axis at the negative-end flat (z=0).
   - +Z toward the positive terminal.
   - Cylinder OD and both end flats kept as assembly datums;
-    "GEEKBMS" lettering is recessed into a side-wall panel.
+    "GEEKBMS" is a shallow silk-screen / decal on a portrait side-wall panel
+    (lettering vertical along +Z).
 """
 
 from __future__ import annotations
@@ -23,15 +24,17 @@ PREVIEW_DIR = ROOT / "preview"
 
 # Nominal envelope (mm): diameter × height
 SPECS = {
+    # panel_w = circumferential (local X / global Y); panel_h = axial (local Y / global Z)
+    # Portrait panels: axial height > circumferential width so "GEEKBMS" sits vertically.
     "18650": {
         "diameter": 18.0,
         "height": 65.0,
         "pos_btn_d": 6.5,
         "pos_btn_h": 0.8,
         "insulator_od": 12.0,
-        "panel_w": 14.0,
-        "panel_h": 7.5,
-        "text_size": 2.0,
+        "panel_w": 6.0,
+        "panel_h": 22.0,
+        "text_size": 3.5,
         "wrap_color": "blue",
         "cap_color": "nickel",
     },
@@ -41,9 +44,9 @@ SPECS = {
         "pos_btn_d": 7.5,
         "pos_btn_h": 0.9,
         "insulator_od": 14.0,
-        "panel_w": 16.0,
-        "panel_h": 8.0,
-        "text_size": 2.3,
+        "panel_w": 6.5,
+        "panel_h": 25.0,
+        "text_size": 4.0,
         "wrap_color": "green",
         "cap_color": "nickel",
     },
@@ -53,9 +56,9 @@ SPECS = {
         "pos_btn_d": 9.0,
         "pos_btn_h": 0.9,
         "insulator_od": 17.0,
-        "panel_w": 20.0,
-        "panel_h": 8.5,
-        "text_size": 2.8,
+        "panel_w": 7.5,
+        "panel_h": 28.0,
+        "text_size": 4.5,
         "wrap_color": "black",
         "cap_color": "nickel",
     },
@@ -65,9 +68,9 @@ SPECS = {
         "pos_btn_d": 14.0,
         "pos_btn_h": 1.0,
         "insulator_od": 28.0,
-        "panel_w": 34.0,
-        "panel_h": 12.0,
-        "text_size": 4.5,
+        "panel_w": 10.0,
+        "panel_h": 38.0,
+        "text_size": 6.0,
         "wrap_color": "blue",
         "cap_color": "nickel",
     },
@@ -101,8 +104,9 @@ def build_cell(name: str, spec: dict) -> cq.Workplane:
     wrap_end_margin = max(1.0, 0.06 * H)
     groove_w = 0.35
     groove_d = 0.12
-    panel_depth = 0.25
-    text_depth = 0.40
+    # Shallow silk-screen / decal look (not deep engraved grooves)
+    panel_depth = 0.08  # hairline panel recess
+    text_raise = 0.06  # slight raised film above panel floor (stays under OD)
     panel_z = body_h * 0.45
 
     # Main wrap cylinder — OD is the assembly datum diameter
@@ -144,7 +148,7 @@ def build_cell(name: str, spec: dict) -> cq.Workplane:
     )
     cell = cell.union(button)
 
-    # Recessed label panel on +X wrap wall (does not increase OD)
+    # Shallow label panel on +X wrap wall (portrait: axial h > circ w; does not increase OD)
     panel_cut = (
         cq.Workplane("YZ")
         .workplane(offset=R)
@@ -154,14 +158,15 @@ def build_cell(name: str, spec: dict) -> cq.Workplane:
     )
     cell = cell.cut(panel_cut)
 
-    # Recessed "GEEKBMS" lettering inside the panel
+    # Silk-screen style "GEEKBMS": rotate 90° in YZ so lettering reads along +Z (cell axis),
+    # then raise a thin film from the panel floor (under OD — not a deep carve).
     text_solid = (
         cq.Workplane("YZ")
         .workplane(offset=R - panel_depth)
-        .transformed(offset=(0, panel_z, 0))
-        .text("GEEKBMS", text_size, -text_depth, font="DejaVu Sans", kind="bold")
+        .transformed(rotate=(0, 0, 90), offset=(0, panel_z, 0))
+        .text("GEEKBMS", text_size, text_raise, font="DejaVu Sans", kind="bold")
     )
-    cell = cell.cut(text_solid)
+    cell = cell.union(text_solid)
 
     return cell
 
@@ -284,25 +289,42 @@ def render_preview_png(name: str, spec: dict, out_path: Path) -> None:
         shade=True,
     )
 
-    # Label marker on +X
-    ax.text(
-        R * 0.15,
-        0,
-        body_h * 0.45,
-        "GEEKBMS",
-        color="white",
-        fontsize=8,
-        ha="center",
-        va="center",
-        fontweight="bold",
-    )
+    # Vertical label marker on +X (portrait panel + lettering along +Z)
+    panel_w = float(spec["panel_w"])
+    panel_h = float(spec["panel_h"])
+    panel_z = body_h * 0.45
+    y_box = [-panel_w / 2, panel_w / 2, panel_w / 2, -panel_w / 2, -panel_w / 2]
+    z_box = [
+        panel_z - panel_h / 2,
+        panel_z - panel_h / 2,
+        panel_z + panel_h / 2,
+        panel_z + panel_h / 2,
+        panel_z - panel_h / 2,
+    ]
+    ax.plot([R * 1.01] * 5, y_box, z_box, color="white", linewidth=1.0, alpha=0.95)
+    label = "GEEKBMS"
+    span = panel_h * 0.78
+    for i, ch in enumerate(label):
+        zi = panel_z + span / 2 - (i + 0.5) * (span / len(label))
+        ax.text(
+            R * 1.05,
+            0.0,
+            zi,
+            ch,
+            color="white",
+            fontsize=8,
+            ha="center",
+            va="center",
+            fontweight="bold",
+            zorder=10,
+        )
 
     lim = max(D, H) * 0.55
     ax.set_xlim(-lim, lim)
     ax.set_ylim(-lim, lim)
     ax.set_zlim(0, H)
     ax.set_box_aspect((D, D, H))
-    ax.view_init(elev=18, azim=35)
+    ax.view_init(elev=18, azim=25)
     ax.set_axis_off()
     ax.set_title(f"{name}  Ø{D:g}×{H:g} mm  (exterior ref.)", fontsize=11, pad=8)
 
