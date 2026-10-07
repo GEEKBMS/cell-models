@@ -1,0 +1,66 @@
+# GEEKBMS cylindrical cell exterior STEP catalog
+# Units: millimetres. Exterior envelope reference only.
+# Coordinate system: origin on cell axis at negative-end flat (z=0);
+# +Z toward positive terminal.
+
+units: mm
+coordinate_system:
+  origin: cell axis at negative end flat
+  positive_terminal: +Z
+  datum_faces:
+    - cylinder_od
+    - negative_end_flat
+    - positive_end_shoulder_plane
+
+cells:
+  - name: 18650
+    file: cells/18650/18650_geekbms.step
+    preview: preview/18650.png
+    diameter_mm: 18.0
+    height_mm: 65.0
+    positive_button_diameter_mm: 6.5
+    positive_button_height_mm: 0.8
+    wrap_style_color: blue
+    cap_style_color: nickel
+    bbox_diameter_mm: 18.000
+    bbox_height_mm: 65.000
+    step_valid: true
+
+  - name: 21700
+    file: cells/21700/21700_geekbms.step
+    preview: preview/21700.png
+    diameter_mm: 21.0
+    height_mm: 70.0
+    positive_button_diameter_mm: 7.5
+    positive_button_height_mm: 0.9
+    wrap_style_color: green
+    cap_style_color: nickel
+    bbox_diameter_mm: 21.000
+    bbox_height_mm: 70.000
+    step_valid: true
+
+  - name: 26650
+    file: cells/26650/26650_geekbms.step
+    preview: preview/26650.png
+    diameter_mm: 26.0
+    height_mm: 65.0
+    positive_button_diameter_mm: 9.0
+    positive_button_height_mm: 0.9
+    wrap_style_color: black
+    cap_style_color: nickel
+    bbox_diameter_mm: 26.000
+    bbox_height_mm: 65.000
+    step_valid: true
+
+  - name: 4680
+    file: cells/4680/4680_geekbms.step
+    preview: preview/4680.png
+    diameter_mm: 46.0
+    height_mm: 80.0
+    positive_button_diameter_mm: 14.0
+    positive_button_height_mm: 1.0
+    wrap_style_color: blue
+    cap_style_color: nickel
+    bbox_diameter_mm: 46.000
+    bbox_height_mm: 80.000
+    step_valid: true
