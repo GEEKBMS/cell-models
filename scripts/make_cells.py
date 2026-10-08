@@ -1,80 +1,36 @@
 #!/usr/bin/env python3
-"""Generate stylized exterior cylindrical Li-ion cell STEP models (mm).
+"""Generate clean exterior cylindrical Li-ion cell STEP models (Plan A, mm).
 
-Coordinate system (documented in README):
-  - Origin on cell axis at the negative-end flat (z=0).
-  - +Z toward the positive terminal.
-  - Cylinder OD and both end flats kept as assembly datums;
-    "GEEKBMS" is a shallow silk-screen / decal on a portrait side-wall panel
-    (lettering vertical along +Z).
+Plan A:
+  - STEP  = clean CadQuery exterior envelope for CAD assembly. NO silkscreen /
+            text / label-panel geometry.
+  - GLB / PNG = Blender visuals; GEEKBMS branding lives only in the wrap
+            texture (see scripts/blender/).
+
+Coordinate system (shared with the Blender scene and README):
+  - Origin on cell axis at the negative-end flat (z = 0).
+  - +Z toward the positive terminal (button top at z = height).
+  - Cylinder OD and both end flats kept as assembly datums.
+
+Usage:
+  /workspace/.cad_venv/bin/python scripts/make_cells.py            # all specs
+  /workspace/.cad_venv/bin/python scripts/make_cells.py --only 18650
 """
 
 from __future__ import annotations
 
-import math
+import sys
 from pathlib import Path
 
 import cadquery as cq
 from OCP.IFSelect import IFSelect_RetDone
 from OCP.STEPControl import STEPControl_Reader
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from specs import ORDER, SPECS, body_height  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 CELLS_DIR = ROOT / "cells"
-PREVIEW_DIR = ROOT / "preview"
-
-# Nominal envelope (mm): diameter × height
-SPECS = {
-    # panel_w = circumferential (local X / global Y); panel_h = axial (local Y / global Z)
-    # Portrait panels: axial height > circumferential width so "GEEKBMS" sits vertically.
-    "18650": {
-        "diameter": 18.0,
-        "height": 65.0,
-        "pos_btn_d": 6.5,
-        "pos_btn_h": 0.8,
-        "insulator_od": 12.0,
-        "panel_w": 6.0,
-        "panel_h": 22.0,
-        "text_size": 3.5,
-        "wrap_color": "blue",
-        "cap_color": "nickel",
-    },
-    "21700": {
-        "diameter": 21.0,
-        "height": 70.0,
-        "pos_btn_d": 7.5,
-        "pos_btn_h": 0.9,
-        "insulator_od": 14.0,
-        "panel_w": 6.5,
-        "panel_h": 25.0,
-        "text_size": 4.0,
-        "wrap_color": "green",
-        "cap_color": "nickel",
-    },
-    "26650": {
-        "diameter": 26.0,
-        "height": 65.0,
-        "pos_btn_d": 9.0,
-        "pos_btn_h": 0.9,
-        "insulator_od": 17.0,
-        "panel_w": 7.5,
-        "panel_h": 28.0,
-        "text_size": 4.5,
-        "wrap_color": "black",
-        "cap_color": "nickel",
-    },
-    "4680": {
-        "diameter": 46.0,
-        "height": 80.0,
-        "pos_btn_d": 14.0,
-        "pos_btn_h": 1.0,
-        "insulator_od": 28.0,
-        "panel_w": 10.0,
-        "panel_h": 38.0,
-        "text_size": 6.0,
-        "wrap_color": "blue",
-        "cap_color": "nickel",
-    },
-}
 
 
 def _ring_shell(z: float, outer_r: float, inner_r: float, height: float) -> cq.Workplane:
@@ -88,7 +44,7 @@ def _ring_shell(z: float, outer_r: float, inner_r: float, height: float) -> cq.W
 
 
 def build_cell(name: str, spec: dict) -> cq.Workplane:
-    """Build one stylized exterior-only cylindrical cell solid."""
+    """Build one clean, exterior-only cylindrical cell solid (no label geometry)."""
     D = float(spec["diameter"])
     H = float(spec["height"])
     R = D / 2.0
@@ -96,18 +52,11 @@ def build_cell(name: str, spec: dict) -> cq.Workplane:
     pos_btn_d = float(spec["pos_btn_d"])
     pos_btn_h = float(spec["pos_btn_h"])
     insulator_od = float(spec["insulator_od"])
-    panel_w = float(spec["panel_w"])
-    panel_h = float(spec["panel_h"])
-    text_size = float(spec["text_size"])
 
-    body_h = H - pos_btn_h
+    body_h = body_height(spec)
     wrap_end_margin = max(1.0, 0.06 * H)
     groove_w = 0.35
     groove_d = 0.12
-    # Shallow silk-screen / decal look (not deep engraved grooves)
-    panel_depth = 0.08  # hairline panel recess
-    text_raise = 0.06  # slight raised film above panel floor (stays under OD)
-    panel_z = body_h * 0.45
 
     # Main wrap cylinder — OD is the assembly datum diameter
     cell = cq.Workplane("XY").circle(R).extrude(body_h)
@@ -121,7 +70,7 @@ def build_cell(name: str, spec: dict) -> cq.Workplane:
     # Negative end rim cue on side wall (end flat at z=0 stays planar)
     cell = cell.cut(_ring_shell(0.0, R + 0.02, R - 0.18, 0.22))
 
-    # Positive-end insulator rebate + flush ring (stylized PVC/plastic washer look)
+    # Positive-end insulator rebate + flush ring (stylized washer look)
     rebate_h = 0.30
     rebate = (
         cq.Workplane("XY")
@@ -147,27 +96,6 @@ def build_cell(name: str, spec: dict) -> cq.Workplane:
         .extrude(pos_btn_h)
     )
     cell = cell.union(button)
-
-    # Shallow label panel on +X wrap wall (portrait: axial h > circ w; does not increase OD)
-    panel_cut = (
-        cq.Workplane("YZ")
-        .workplane(offset=R)
-        .transformed(offset=(0, panel_z, 0))
-        .rect(panel_w, panel_h)
-        .extrude(-panel_depth)
-    )
-    cell = cell.cut(panel_cut)
-
-    # Silk-screen style "GEEKBMS": rotate 90° in YZ so lettering reads along +Z (cell axis),
-    # then raise a thin film from the panel floor (under OD — not a deep carve).
-    text_solid = (
-        cq.Workplane("YZ")
-        .workplane(offset=R - panel_depth)
-        .transformed(rotate=(0, 0, 90), offset=(0, panel_z, 0))
-        .text("GEEKBMS", text_size, text_raise, font="DejaVu Sans", kind="bold")
-    )
-    cell = cell.union(text_solid)
-
     return cell
 
 
@@ -180,8 +108,6 @@ def validate_step(path: Path, expect_d: float, expect_h: float, tol: float = 0.0
     shape = reader.OneShape()
     if shape is None or shape.IsNull():
         raise RuntimeError(f"STEP shape null for {path}")
-
-    # Re-import via CadQuery for bbox
     imported = cq.Shape.cast(shape)
     bb = imported.BoundingBox()
     ok = (
@@ -192,229 +118,96 @@ def validate_step(path: Path, expect_d: float, expect_h: float, tol: float = 0.0
     )
     return {
         "ok": ok,
-        "xmin": bb.xmin,
-        "xmax": bb.xmax,
-        "ymin": bb.ymin,
-        "ymax": bb.ymax,
-        "zmin": bb.zmin,
-        "zmax": bb.zmax,
         "xlen": bb.xlen,
         "ylen": bb.ylen,
         "zlen": bb.zlen,
+        "zmin": bb.zmin,
+        "zmax": bb.zmax,
+        "faces": len(imported.Faces()),
     }
 
 
-def render_preview_png(name: str, spec: dict, out_path: Path) -> None:
-    """Simple technical isometric schematic (matplotlib) — no brand artwork."""
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-    import numpy as np
-
-    D = spec["diameter"]
-    H = spec["height"]
-    R = D / 2.0
-    btn_r = spec["pos_btn_d"] / 2.0
-    btn_h = spec["pos_btn_h"]
-    body_h = H - btn_h
-
-    wrap_rgb = {
-        "blue": (0.15, 0.35, 0.75),
-        "green": (0.12, 0.55, 0.32),
-        "black": (0.12, 0.12, 0.14),
-    }.get(spec["wrap_color"], (0.15, 0.35, 0.75))
-    metal = (0.72, 0.74, 0.76)
-
-    fig = plt.figure(figsize=(6.4, 6.4), dpi=160)
-    ax = fig.add_subplot(111, projection="3d")
-    ax.set_proj_type("ortho")
-
-    # Cylinder surface (wrap)
-    theta = np.linspace(0, 2 * np.pi, 64)
-    z = np.linspace(0, body_h, 40)
-    Theta, Z = np.meshgrid(theta, z)
-    X = R * np.cos(Theta)
-    Y = R * np.sin(Theta)
-    ax.plot_surface(X, Y, Z, color=wrap_rgb, linewidth=0, antialiased=True, alpha=0.95, shade=True)
-
-    # Top annulus (metal-ish)
-    rr = np.linspace(btn_r + 0.3, R, 12)
-    th = np.linspace(0, 2 * np.pi, 48)
-    RR, TH = np.meshgrid(rr, th)
-    ax.plot_surface(
-        RR * np.cos(TH),
-        RR * np.sin(TH),
-        np.full_like(RR, body_h),
-        color=metal,
-        linewidth=0,
-        alpha=0.95,
-        shade=True,
-    )
-
-    # Button
-    rb = np.linspace(0, btn_r, 10)
-    thb = np.linspace(0, 2 * np.pi, 36)
-    RB, THB = np.meshgrid(rb, thb)
-    ax.plot_surface(
-        RB * np.cos(THB),
-        RB * np.sin(THB),
-        np.full_like(RB, H),
-        color=metal,
-        linewidth=0,
-        alpha=1.0,
-        shade=True,
-    )
-    Zb = np.linspace(body_h, H, 8)
-    THS, ZS = np.meshgrid(thb, Zb)
-    ax.plot_surface(
-        btn_r * np.cos(THS),
-        btn_r * np.sin(THS),
-        ZS,
-        color=metal,
-        linewidth=0,
-        alpha=1.0,
-        shade=True,
-    )
-
-    # Bottom flat
-    rr0 = np.linspace(0, R, 12)
-    RR0, TH0 = np.meshgrid(rr0, th)
-    ax.plot_surface(
-        RR0 * np.cos(TH0),
-        RR0 * np.sin(TH0),
-        np.zeros_like(RR0),
-        color=metal,
-        linewidth=0,
-        alpha=0.95,
-        shade=True,
-    )
-
-    # Vertical label marker on +X (portrait panel + lettering along +Z)
-    panel_w = float(spec["panel_w"])
-    panel_h = float(spec["panel_h"])
-    panel_z = body_h * 0.45
-    y_box = [-panel_w / 2, panel_w / 2, panel_w / 2, -panel_w / 2, -panel_w / 2]
-    z_box = [
-        panel_z - panel_h / 2,
-        panel_z - panel_h / 2,
-        panel_z + panel_h / 2,
-        panel_z + panel_h / 2,
-        panel_z - panel_h / 2,
-    ]
-    ax.plot([R * 1.01] * 5, y_box, z_box, color="white", linewidth=1.0, alpha=0.95)
-    label = "GEEKBMS"
-    span = panel_h * 0.78
-    for i, ch in enumerate(label):
-        zi = panel_z + span / 2 - (i + 0.5) * (span / len(label))
-        ax.text(
-            R * 1.05,
-            0.0,
-            zi,
-            ch,
-            color="white",
-            fontsize=8,
-            ha="center",
-            va="center",
-            fontweight="bold",
-            zorder=10,
-        )
-
-    lim = max(D, H) * 0.55
-    ax.set_xlim(-lim, lim)
-    ax.set_ylim(-lim, lim)
-    ax.set_zlim(0, H)
-    ax.set_box_aspect((D, D, H))
-    ax.view_init(elev=18, azim=25)
-    ax.set_axis_off()
-    ax.set_title(f"{name}  Ø{D:g}×{H:g} mm  (exterior ref.)", fontsize=11, pad=8)
-
-    fig.tight_layout()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, facecolor="white")
-    plt.close(fig)
-
-
-def write_catalog(results: list[dict]) -> None:
+def write_catalog(results: dict[str, dict]) -> None:
     lines = [
-        "# GEEKBMS cylindrical cell exterior STEP catalog",
-        "# Units: millimetres. Exterior envelope reference only.",
-        "# Coordinate system: origin on cell axis at negative-end flat (z=0);",
-        "# +Z toward positive terminal.",
+        "# GEEKBMS cylindrical cell catalog (Plan A)",
+        "# Units: millimetres. Exterior envelope reference only — not a brand tolerance copy.",
+        "# STEP = clean CAD envelope (no silkscreen geometry).",
+        "# GLB / PNG = Blender visuals; GEEKBMS branding is a wrap texture only.",
         "",
         "units: mm",
+        "plan: A",
         "coordinate_system:",
-        "  origin: cell axis at negative end flat",
+        "  origin: cell axis at negative end flat (z = 0)",
         "  positive_terminal: +Z",
         "  datum_faces:",
         "    - cylinder_od",
         "    - negative_end_flat",
         "    - positive_end_shoulder_plane",
+        "glb:",
+        "  units: metres (glTF 2.0 standard; 18 mm = 0.018)",
+        "  up_axis: +Y (glTF convention; maps to STEP +Z)",
+        "  textures: embedded",
         "",
         "cells:",
     ]
-    for r in results:
-        s = SPECS[r["name"]]
+    for name in ORDER:
+        if name not in results:
+            continue
+        s = SPECS[name]
+        r = results[name]
         lines += [
-            f"  - name: {r['name']}",
-            f"    file: cells/{r['name']}/{r['name']}_geekbms.step",
-            f"    preview: preview/{r['name']}.png",
+            f'  - name: "{name}"',
+            f"    step: cells/{name}/{name}_geekbms.step",
+            f"    glb: cells/{name}/{name}_geekbms.glb",
+            f"    preview: preview/{name}.png",
             f"    diameter_mm: {s['diameter']}",
             f"    height_mm: {s['height']}",
+            f"    body_height_mm: {body_height(s):.1f}",
             f"    positive_button_diameter_mm: {s['pos_btn_d']}",
             f"    positive_button_height_mm: {s['pos_btn_h']}",
+            f"    insulator_od_mm: {s['insulator_od']}",
             f"    wrap_style_color: {s['wrap_color']}",
             f"    cap_style_color: {s['cap_color']}",
-            f"    bbox_diameter_mm: {r['bbox']['xlen']:.3f}",
-            f"    bbox_height_mm: {r['bbox']['zlen']:.3f}",
-            f"    step_valid: {str(r['bbox']['ok']).lower()}",
+            f"    bbox_diameter_mm: {r['xlen']:.3f}",
+            f"    bbox_height_mm: {r['zlen']:.3f}",
+            f"    step_valid: {str(r['ok']).lower()}",
             "",
         ]
     (ROOT / "catalog.yaml").write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> None:
-    CELLS_DIR.mkdir(parents=True, exist_ok=True)
-    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+def main(argv: list[str] | None = None) -> None:
+    import argparse
 
-    results = []
-    for name, spec in SPECS.items():
-        print(f"=== Building {name} ===")
+    parser = argparse.ArgumentParser(description="Build GEEKBMS clean cylindrical cell STEP models")
+    parser.add_argument("--only", nargs="+", choices=ORDER, help="Build only these specs")
+    parser.add_argument("--out-dir", type=Path, default=CELLS_DIR,
+                        help="Output root (default: cells/). Files go to <out>/<spec>/")
+    parser.add_argument("--no-catalog", action="store_true", help="Skip rewriting catalog.yaml")
+    parser.add_argument("--no-label", action="store_true",
+                        help="Accepted for compatibility; Plan A STEP is always label-free")
+    args = parser.parse_args(argv)
+
+    names = args.only or ORDER
+    results: dict[str, dict] = {}
+    for name in names:
+        spec = SPECS[name]
+        print(f"=== Building {name}  Ø{spec['diameter']:g}×{spec['height']:g} mm ===")
         cell = build_cell(name, spec)
-        out_dir = CELLS_DIR / name
+        out_dir = args.out_dir / name
         out_dir.mkdir(parents=True, exist_ok=True)
         step_path = out_dir / f"{name}_geekbms.step"
         cq.exporters.export(cell, str(step_path))
-
-        bb = cell.val().BoundingBox()
-        print(
-            f"  wrote {step_path}\n"
-            f"  bbox D≈{bb.xlen:.3f}×{bb.ylen:.3f}, H={bb.zlen:.3f} "
-            f"(z {bb.zmin:.3f}..{bb.zmax:.3f})"
-        )
-
         check = validate_step(step_path, spec["diameter"], spec["height"])
-        print(f"  reimport ok={check['ok']} D={check['xlen']:.3f} H={check['zlen']:.3f}")
+        print(f"  wrote {step_path}  ok={check['ok']} D={check['xlen']:.3f} "
+              f"H={check['zlen']:.3f} zmin={check['zmin']:.3f} faces={check['faces']}")
+        if not check["ok"]:
+            raise SystemExit(f"bbox validation failed for {name}")
+        results[name] = check
 
-        preview_path = PREVIEW_DIR / f"{name}.png"
-        try:
-            render_preview_png(name, spec, preview_path)
-            print(f"  preview {preview_path}")
-            preview_ok = True
-        except Exception as exc:  # noqa: BLE001
-            print(f"  preview FAILED: {exc}")
-            preview_ok = False
-
-        results.append(
-            {
-                "name": name,
-                "step": str(step_path),
-                "bbox": check,
-                "preview_ok": preview_ok,
-            }
-        )
-
-    write_catalog(results)
-    print("catalog.yaml written")
+    if not args.no_catalog and args.out_dir == CELLS_DIR and set(names) == set(ORDER):
+        write_catalog(results)
+        print("catalog.yaml written")
     print("DONE")
 
 

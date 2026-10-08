@@ -1,3 +1,4 @@
-# Large CAD binaries via Git LFS
+# Large CAD / 3D binaries via Git LFS
 *.step filter=lfs diff=lfs merge=lfs -text
 *.stp filter=lfs diff=lfs merge=lfs -text
+*.glb filter=lfs diff=lfs merge=lfs -text

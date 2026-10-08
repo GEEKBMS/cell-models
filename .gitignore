@@ -1,0 +1,6 @@
+# Local review / scratch output (not published)
+review/
+build/
+__pycache__/
+*.pyc
+*.blend1
